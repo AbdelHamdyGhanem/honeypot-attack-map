@@ -1,1 +1,61 @@
 
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Honeypot Attack Map</title>
+</head>
+<body>
+  <h1>Honeypot Attack Logs</h1>
+
+  <label>Workspace ID:</label>
+  <input id="workspaceId" placeholder="Enter workspace ID" />
+  <br/>
+
+  <label>Workspace Key:</label>
+  <input id="workspaceKey" placeholder="Enter workspace key" />
+  <br/>
+
+  <button onclick="runQuery()">Run Query</button>
+
+  <pre id="output"></pre>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+  <script>
+    async function runQuery() {
+      const workspaceId = document.getElementById("workspaceId").value;
+      const workspaceKey = document.getElementById("workspaceKey").value;
+
+      const query = `
+        Syslog
+        | where ProcessName == "sshd"
+        | where SyslogMessage has "Failed password"
+        | take 50
+      `;
+
+      const url = `https://${workspaceId}.ods.opinsights.azure.com/api/logs?api-version=v1`;
+      const body = JSON.stringify({ query });
+
+      const date = new Date().toUTCString();
+      const stringToSign = `POST\n${body.length}\napplication/json\nx-ms-date:${date}\n/api/logs`;
+
+      const hash = CryptoJS.HmacSHA256(stringToSign, CryptoJS.enc.Base64.parse(workspaceKey));
+      const signature = `SharedKey ${workspaceId}:${CryptoJS.enc.Base64.stringify(hash)}`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": signature,
+          "x-ms-date": date
+        },
+        body
+      });
+
+      const data = await response.json();
+      document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
